@@ -47,13 +47,6 @@ from ...utils import (
 from ...utils.model_parallel_utils import assert_device_map, get_device_map
 from .configuration_t5 import T5Config
 
-try:
-    import xformers
-    import xformers.ops
-except ImportError:
-    xformers = None
-
-
 logger = logging.get_logger(__name__)
 
 _CONFIG_FOR_DOC = "T5Config"
@@ -562,10 +555,6 @@ class T5Attention(nn.Module):
             attn_output = torch.nn.functional.scaled_dot_product_attention(
                 query_states, key_states, value_states, attn_mask=position_bias_masked, dropout_p=self.dropout if self.training else 0.0)
 
-        elif xformers is not None:
-            attn_output = xformers.ops.memory_efficient_attention(
-                query_states, key_states, value_states, attn_bias=position_bias_masked, p=self.dropout, scale=1.0
-            )
         else:
             # compute scores
             scores = torch.matmul(
