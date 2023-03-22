@@ -231,7 +231,7 @@ class LlamaAttention(nn.Module):
 
         if hasattr(nn.functional, 'scaled_dot_product_attention'):
             attn_output = nn.functional.scaled_dot_product_attention(
-                query_states, key_states, value_states, attn_mask=attention_mask, dropout_p=self.dropout if self.training else 0.0)
+                query_states, key_states, value_states, attn_mask=attention_mask)
 
         else:
             attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
