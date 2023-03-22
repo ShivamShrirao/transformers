@@ -550,9 +550,9 @@ class T5Attention(nn.Module):
         else:
             position_bias_masked = position_bias
         
-        if hasattr(torch.nn.functional, 'scaled_dot_product_attention'):
+        if hasattr(nn.functional, 'scaled_dot_product_attention'):
             query_states *= math.sqrt(self.key_value_proj_dim)
-            attn_output = torch.nn.functional.scaled_dot_product_attention(
+            attn_output = nn.functional.scaled_dot_product_attention(
                 query_states, key_states, value_states, attn_mask=position_bias_masked, dropout_p=self.dropout if self.training else 0.0)
 
         else:
