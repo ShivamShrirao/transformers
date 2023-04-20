@@ -126,7 +126,7 @@ class LlamaRotaryEmbedding(torch.nn.Module):
 def rotate_half(x):
     """Rotates half the hidden dims of the input."""
     x1 = x[..., : x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2 :]
+    x2 = x[..., x.shape[-1] // 2:]
     return torch.cat((-x2, x1), dim=-1)
 
 
@@ -216,7 +216,7 @@ class LlamaAttention(nn.Module):
 
         if hasattr(nn.functional, 'scaled_dot_product_attention'):
             attn_output = nn.functional.scaled_dot_product_attention(
-                query_states, key_states, value_states, attn_mask=attention_mask)
+                query_states, key_states, value_states, attn_mask=attention_mask, is_causal=attention_mask is None)
 
         else:
             attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
@@ -466,16 +466,20 @@ class LlamaModel(LlamaPreTrainedModel):
     def _prepare_decoder_attention_mask(self, attention_mask, input_shape, inputs_embeds, past_key_values_length):
         # create causal mask
         # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
-        combined_attention_mask = None
-        if input_shape[-1] > 1:
-            combined_attention_mask = _make_causal_mask(
-                input_shape,
-                inputs_embeds.dtype,
-                device=inputs_embeds.device,
-                past_key_values_length=past_key_values_length,
-            )
 
+        # TODO: verify the mask is correct for inference.
         if attention_mask is not None:
+            if attention_mask.all():
+                return None
+
+            combined_attention_mask = None
+            if input_shape[-1] > 1:
+                combined_attention_mask = _make_causal_mask(
+                    input_shape,
+                    inputs_embeds.dtype,
+                    device=inputs_embeds.device,
+                    past_key_values_length=past_key_values_length,
+                )
             # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
             expanded_attn_mask = _expand_mask(attention_mask, inputs_embeds.dtype, tgt_len=input_shape[-1]).to(
                 inputs_embeds.device
@@ -483,8 +487,9 @@ class LlamaModel(LlamaPreTrainedModel):
             combined_attention_mask = (
                 expanded_attn_mask if combined_attention_mask is None else expanded_attn_mask + combined_attention_mask
             )
-
-        return combined_attention_mask
+            return combined_attention_mask
+        else:
+            return None
 
     @add_start_docstrings_to_model_forward(LLAMA_INPUTS_DOCSTRING)
     def forward(
