@@ -639,6 +639,13 @@ class AutoModelForMaskedLM(metaclass=DummyObject):
         requires_backends(self, ["torch"])
 
 
+class AutoModelForMaskGeneration(metaclass=DummyObject):
+    _backends = ["torch"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["torch"])
+
+
 class AutoModelForMultipleChoice(metaclass=DummyObject):
     _backends = ["torch"]
 
@@ -2979,6 +2986,37 @@ class FNetModel(metaclass=DummyObject):
 
 
 class FNetPreTrainedModel(metaclass=DummyObject):
+    _backends = ["torch"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["torch"])
+
+
+FOCALNET_PRETRAINED_MODEL_ARCHIVE_LIST = None
+
+
+class FocalNetForImageClassification(metaclass=DummyObject):
+    _backends = ["torch"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["torch"])
+
+
+class FocalNetForMaskedImageModeling(metaclass=DummyObject):
+    _backends = ["torch"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["torch"])
+
+
+class FocalNetModel(metaclass=DummyObject):
+    _backends = ["torch"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["torch"])
+
+
+class FocalNetPreTrainedModel(metaclass=DummyObject):
     _backends = ["torch"]
 
     def __init__(self, *args, **kwargs):
