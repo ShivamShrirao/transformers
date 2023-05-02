@@ -362,7 +362,23 @@ def deepspeed_init(trainer, num_training_steps, resume_from_checkpoint=None, inf
     else:
         trainer.optimizer = None  # important for when deepspeed_init is used as re-init
         optimizer, lr_scheduler = deepspeed_optim_sched(trainer, hf_deepspeed_config, args, num_training_steps)
-        model_parameters = list(filter(lambda p: p.requires_grad, model.parameters()))
+        # model_parameters = list(filter(lambda p: p.requires_grad, model.parameters()))
+        output_gates = [n for n, p in model.named_parameters() if "output_gate" in n]
+        lr = config['optimizer']['params']['lr']
+        model_parameters = [
+            {
+                "params": [
+                    p for n, p in model.named_parameters() if (p.requires_grad and n not in output_gates)
+                ],
+                "lr": lr,
+            },
+            {
+                "params": [
+                    p for n, p in model.named_parameters() if (p.requires_grad and n in output_gates)
+                ],
+                "lr": lr * 100,
+            }
+        ]
 
     # keep for quick debug:
     # from pprint import pprint; pprint(config)

@@ -47,7 +47,6 @@ from ...utils import (
 from ...utils.model_parallel_utils import assert_device_map, get_device_map
 from .configuration_t5 import T5Config
 
-
 logger = logging.get_logger(__name__)
 
 _CONFIG_FOR_DOC = "T5Config"
@@ -526,20 +525,15 @@ class T5Attention(nn.Module):
             hidden_states, self.v, key_value_states, past_key_value[1] if past_key_value is not None else None
         )
 
-        # compute scores
-        scores = torch.matmul(
-            query_states, key_states.transpose(3, 2)
-        )  # equivalent of torch.einsum("bnqd,bnkd->bnqk", query_states, key_states), compatible with onnx op>9
-
         if position_bias is None:
             if not self.has_relative_attention_bias:
                 position_bias = torch.zeros(
-                    (1, self.n_heads, real_seq_length, key_length), device=scores.device, dtype=scores.dtype
+                    (1, self.n_heads, real_seq_length, key_length), device=query_states.device, dtype=query_states.dtype
                 )
                 if self.gradient_checkpointing and self.training:
                     position_bias.requires_grad = True
             else:
-                position_bias = self.compute_bias(real_seq_length, key_length, device=scores.device)
+                position_bias = self.compute_bias(real_seq_length, key_length, device=query_states.device)
 
             # if key and values are already calculated
             # we want only the last query position bias
@@ -555,20 +549,32 @@ class T5Attention(nn.Module):
             position_bias_masked = position_bias[:, mask.bool()]
         else:
             position_bias_masked = position_bias
+        
+        if hasattr(nn.functional, 'scaled_dot_product_attention'):
+            query_states *= math.sqrt(self.key_value_proj_dim)
+            attn_output = nn.functional.scaled_dot_product_attention(
+                query_states, key_states, value_states, attn_mask=position_bias_masked, dropout_p=self.dropout if self.training else 0.0)
 
-        scores += position_bias_masked
-        attn_weights = nn.functional.softmax(scores.float(), dim=-1).type_as(
-            scores
-        )  # (batch_size, n_heads, seq_length, key_length)
-        attn_weights = nn.functional.dropout(
-            attn_weights, p=self.dropout, training=self.training
-        )  # (batch_size, n_heads, seq_length, key_length)
+        else:
+            # compute scores
+            scores = torch.matmul(
+                query_states, key_states.transpose(3, 2)
+            )  # equivalent of torch.einsum("bnqd,bnkd->bnqk", query_states, key_states), compatible with onnx op>9
 
-        # Mask heads if we want to
-        if layer_head_mask is not None:
-            attn_weights = attn_weights * layer_head_mask
+            scores += position_bias_masked
+            attn_weights = nn.functional.softmax(scores.float(), dim=-1).type_as(
+                scores
+            )  # (batch_size, n_heads, seq_length, key_length)
+            attn_weights = nn.functional.dropout(
+                attn_weights, p=self.dropout, training=self.training
+            )  # (batch_size, n_heads, seq_length, key_length)
+            # Mask heads if we want to
+            if layer_head_mask is not None:
+                attn_weights = attn_weights * layer_head_mask
 
-        attn_output = unshape(torch.matmul(attn_weights, value_states))  # (batch_size, seq_length, dim)
+            attn_output = torch.matmul(attn_weights, value_states)
+        
+        attn_output = unshape(attn_output)  # (batch_size, seq_length, dim)
         attn_output = self.o(attn_output)
 
         present_key_value_state = (key_states, value_states) if (self.is_decoder and use_cache) else None
